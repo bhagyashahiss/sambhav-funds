@@ -112,13 +112,25 @@ export default function IncomePage() {
 
   // Unique events for filter dropdown
   const eventOptions = useMemo(() => {
-    const eventIds = [...new Set(transactions.map((t) => t.event_id).filter(Boolean))];
-    return eventIds.map((eid) => ({ id: eid!, name: events[eid!]?.name || "Unknown" }));
+    const eventIds = Array.from(
+      new Set(
+        transactions
+          .map((t) => t.event_id)
+          .filter((eventId): eventId is string => Boolean(eventId))
+      )
+    );
+    return eventIds.map((eid) => ({ id: eid, name: events[eid]?.name || "Unknown" }));
   }, [transactions, events]);
 
   // Unique members for filter
   const memberOptions = useMemo(() => {
-    const memberIds = [...new Set(transactions.map((t) => t.member_id))];
+    const memberIds = Array.from(
+      new Set(
+        transactions
+          .map((t) => t.member_id)
+          .filter((memberId): memberId is string => Boolean(memberId))
+      )
+    );
     return memberIds.map((mid) => ({ id: mid, name: members[mid] || "Unknown" }));
   }, [transactions, members]);
 

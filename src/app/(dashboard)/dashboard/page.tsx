@@ -60,7 +60,13 @@ export default function DashboardPage() {
       }, {} as Record<string, string>);
 
       // Get event->category mapping
-      const eventIds = [...new Set((allTxns || []).map((t: any) => t.event_id).filter(Boolean))];
+      const eventIds = Array.from(
+        new Set(
+          (allTxns || [])
+            .map((t: any) => t.event_id)
+            .filter((eventId: string | null): eventId is string => Boolean(eventId))
+        )
+      );
       let eventCategoryMap: Record<string, string> = {};
       let eventNameMap: Record<string, string> = {};
       if (eventIds.length > 0) {
