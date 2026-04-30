@@ -420,7 +420,7 @@ export function EventDetail({
                     </button>
                   ))}
                 </div>
-              )}}
+              )}
               {lines.length > 0 && (
                 <p className="text-xs text-gray-500 text-right">
                   Total:{" "}
