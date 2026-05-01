@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function CategoriesPage() {
           .select("role")
           .eq("auth_user_id", user.id)
           .single();
-        setIsAdmin(member?.role === "admin" || member?.role === "super-admin");
+        setIsSuperAdmin(member?.role === "super-admin");
       }
 
       setLoading(false);
@@ -46,7 +46,7 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-      <CategoryList categories={categories} isAdmin={isAdmin} />
+      <CategoryList categories={categories} isSuperAdmin={isSuperAdmin} />
     </div>
   );
 }

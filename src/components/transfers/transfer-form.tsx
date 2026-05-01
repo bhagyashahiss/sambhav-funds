@@ -39,6 +39,7 @@ export function TransferForm({ members, currentMemberId, onTransferAdded }: Prop
     const fromName = members.find((m) => m.id === fromMemberId)?.name || "";
     const toName = members.find((m) => m.id === toMemberId)?.name || "";
     const desc = `Transfer: ${fromName} → ${toName}${note ? ` (${note})` : ""}`;
+    const today = new Date().toISOString().split("T")[0];
 
     // Create expense transaction for "from" member
     const { error: err1 } = await supabase.from("transactions").insert({
@@ -46,6 +47,7 @@ export function TransferForm({ members, currentMemberId, onTransferAdded }: Prop
       type: "expense",
       amount: transferAmount,
       description: desc,
+      transaction_date: today,
       created_by: currentMemberId,
     });
 
@@ -56,6 +58,7 @@ export function TransferForm({ members, currentMemberId, onTransferAdded }: Prop
       amount: transferAmount,
       description: desc,
       donor_name: fromName,
+      transaction_date: today,
       created_by: currentMemberId,
     });
 

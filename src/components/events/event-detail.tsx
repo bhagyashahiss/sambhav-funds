@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -24,6 +24,7 @@ interface ExpenseLine {
 interface TransactionRow {
   id: string;
   type: "income" | "expense";
+  payment_mode: "cash" | "upi" | null;
   amount: number;
   description: string | null;
   donor_name: string | null;
@@ -68,9 +69,12 @@ export function EventDetail({
   const [amount, setAmount] = useState("");
   const [donorName, setDonorName] = useState("");
   const [description, setDescription] = useState("");
-  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split("T")[0]);
+  const [paymentMode, setPaymentMode] = useState<"cash" | "upi">("cash");
+  const [transactionDate, setTransactionDate] = useState("");
   const [lines, setLines] = useState<{ item_name: string; amount: string }[]>([]);
+  const [donorSuggestions, setDonorSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [settlingTxnId, setSettlingTxnId] = useState<string | null>(null);
   const supabase = createClient();
 
   const totalIncome = transactions
@@ -80,6 +84,41 @@ export function EventDetail({
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + Number(t.amount), 0);
   const balance = totalIncome - totalExpense;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchDonorSuggestions() {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("donor_name")
+        .eq("type", "income")
+        .not("donor_name", "is", null);
+
+      if (error) {
+        console.error("Failed to fetch donor suggestions:", error);
+        return;
+      }
+
+      const donors = Array.from(
+        new Set(
+          (data || [])
+            .map((row: any) => (row.donor_name || "").trim())
+            .filter(Boolean)
+        )
+      );
+
+      if (isMounted) {
+        setDonorSuggestions(donors);
+      }
+    }
+
+    fetchDonorSuggestions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function addLine() {
     setLines([...lines, { item_name: "", amount: "" }]);
@@ -99,6 +138,12 @@ export function EventDetail({
     e.preventDefault();
     setLoading(true);
 
+    if (txnType === "income" && !description.trim()) {
+      alert("Description is required for income transactions.");
+      setLoading(false);
+      return;
+    }
+
     const txnAmount =
       txnType === "expense" && lines.length > 0
         ? lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
@@ -116,6 +161,7 @@ export function EventDetail({
         event_id: event.id,
         member_id: memberId,
         type: txnType,
+        payment_mode: paymentMode,
         amount: txnAmount,
         donor_name: txnType === "income" ? donorName || null : null,
         description: description || null,
@@ -149,8 +195,9 @@ export function EventDetail({
     setAmount("");
     setDonorName("");
     setDescription("");
+    setPaymentMode("cash");
     setMemberId("");
-    setTransactionDate(new Date().toISOString().split("T")[0]);
+    setTransactionDate("");
     setLines([]);
     setShowForm(false);
     setLoading(false);
@@ -164,7 +211,8 @@ export function EventDetail({
     setAmount(String(Number(txn.amount)));
     setDonorName(txn.donor_name || "");
     setDescription(txn.description || "");
-    setTransactionDate(txn.transaction_date || new Date().toISOString().split("T")[0]);
+    setPaymentMode(txn.payment_mode === "upi" ? "upi" : "cash");
+    setTransactionDate(txn.transaction_date || "");
     setMemberId(txn.member_id || "");
     setLines(txn.expense_lines.map((l) => ({ item_name: l.item_name, amount: String(Number(l.amount)) })));
     setShowForm(true);
@@ -185,6 +233,7 @@ export function EventDetail({
       .update({
         member_id: memberId,
         type: txnType,
+        payment_mode: paymentMode,
         amount: txnAmount,
         donor_name: txnType === "income" ? donorName || null : null,
         description: description || null,
@@ -212,8 +261,9 @@ export function EventDetail({
     setAmount("");
     setDonorName("");
     setDescription("");
+    setPaymentMode("cash");
     setMemberId("");
-    setTransactionDate(new Date().toISOString().split("T")[0]);
+    setTransactionDate("");
     setLines([]);
     setShowForm(false);
     setEditingTxn(null);
@@ -228,6 +278,33 @@ export function EventDetail({
       alert("Failed to delete: " + error.message);
       return;
     }
+    if (onTransactionAdded) onTransactionAdded();
+  }
+
+  async function handleMarkDone(txn: TransactionRow) {
+    if (!isAdmin) return;
+    const today = new Date().toISOString().split("T")[0];
+    const suggestedDate = txn.transaction_date || today;
+    const pickedDate = window.prompt(
+      "Set transaction done date (YYYY-MM-DD)",
+      suggestedDate
+    );
+    if (pickedDate === null) return;
+    const finalDate = pickedDate || today;
+
+    setSettlingTxnId(txn.id);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ transaction_date: finalDate })
+      .eq("id", txn.id);
+
+    if (error) {
+      alert("Failed to mark transaction as done: " + error.message);
+      setSettlingTxnId(null);
+      return;
+    }
+
+    setSettlingTxnId(null);
     if (onTransactionAdded) onTransactionAdded();
   }
 
@@ -353,10 +430,18 @@ export function EventDetail({
               <input
                 type="text"
                 placeholder="Donor name (Labharthi)"
+                list="donor-names-list"
                 value={donorName}
                 onChange={(e) => setDonorName(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               />
+              {donorSuggestions.length > 0 && (
+                <datalist id="donor-names-list">
+                  {donorSuggestions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              )}
             </>
           )}
 
@@ -442,11 +527,42 @@ export function EventDetail({
 
           <input
             type="text"
-            placeholder="Description / Note (optional)"
+            placeholder={txnType === "income" && !editingTxn ? "Description / Note (required)" : "Description / Note (optional)"}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+            required={txnType === "income" && !editingTxn}
           />
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Payment Mode
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMode("cash")}
+                className={`px-3 py-2 rounded-lg text-sm border transition ${
+                  paymentMode === "cash"
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                    : "bg-white border-gray-300 text-gray-600"
+                }`}
+              >
+                ● Cash
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMode("upi")}
+                className={`px-3 py-2 rounded-lg text-sm border transition ${
+                  paymentMode === "upi"
+                    ? "bg-indigo-50 border-indigo-300 text-indigo-700"
+                    : "bg-white border-gray-300 text-gray-600"
+                }`}
+              >
+                ● UPI
+              </button>
+            </div>
+          </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -457,8 +573,10 @@ export function EventDetail({
               value={transactionDate}
               onChange={(e) => setTransactionDate(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Leave empty to keep this as receivable/payable.
+            </p>
           </div>
 
           <div className="flex gap-2">
@@ -485,7 +603,18 @@ export function EventDetail({
         <h2 className="text-lg font-semibold text-gray-900">Transactions</h2>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
           {transactions.map((txn) => (
-            <div key={txn.id} className="px-4 py-3">
+            <div
+              key={txn.id}
+              className={`px-4 py-3 ${
+                !txn.transaction_date ? "bg-amber-50/70" : ""
+              } ${!txn.transaction_date && isAdmin ? "cursor-pointer hover:bg-amber-100/70" : ""}`}
+              onClick={() => {
+                if (!txn.transaction_date && isAdmin && !settlingTxnId) {
+                  handleMarkDone(txn);
+                }
+              }}
+              title={!txn.transaction_date && isAdmin ? "Click to mark transaction done" : undefined}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">
@@ -493,12 +622,45 @@ export function EventDetail({
                       ? txn.donor_name || "Collection"
                       : txn.description || "Expense"}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {txn.member?.name} •{" "}
-                    {formatDate(txn.transaction_date || txn.created_at)}
+                  <p className="text-xs text-gray-500 flex flex-wrap items-center gap-2">
+                    <span>{txn.member?.name}</span>
+                    <span>•</span>
+                    {txn.transaction_date ? (
+                      <span>{formatDate(txn.transaction_date)}</span>
+                    ) : (
+                      <span className="text-amber-700 font-medium">
+                        {txn.type === "income" ? "Receivable" : "Payable"}
+                      </span>
+                    )}
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full border text-[11px] font-medium ${
+                        txn.payment_mode === "upi"
+                          ? "text-indigo-700 border-indigo-200 bg-indigo-50"
+                          : "text-emerald-700 border-emerald-200 bg-emerald-50"
+                      }`}
+                    >
+                      {(txn.payment_mode || "cash").toUpperCase()}
+                    </span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {!txn.transaction_date && isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkDone(txn);
+                      }}
+                      disabled={settlingTxnId === txn.id}
+                      className="text-xs px-2 py-1 rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition disabled:opacity-60"
+                      title="Mark transaction done"
+                    >
+                      {settlingTxnId === txn.id
+                        ? "Saving..."
+                        : txn.type === "income"
+                        ? "Mark Received"
+                        : "Mark Paid"}
+                    </button>
+                  )}
                   <span
                     className={`text-sm font-semibold ${
                       txn.type === "income" ? "text-green-600" : "text-red-600"
@@ -507,23 +669,29 @@ export function EventDetail({
                     {txn.type === "income" ? "+" : "-"}
                     {formatCurrency(Number(txn.amount))}
                   </span>
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEdit(txn);
+                      }}
+                      className="p-1 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   {isSuperAdmin && (
-                    <>
-                      <button
-                        onClick={() => startEdit(txn)}
-                        className="p-1 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition"
-                        title="Edit"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTxn(txn.id)}
-                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteTxn(txn.id);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   )}
                 </div>
               </div>

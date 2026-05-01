@@ -11,6 +11,7 @@ interface IncomeRow {
   amount: number;
   donor_name: string | null;
   description: string | null;
+  payment_mode: "cash" | "upi" | null;
   member_id: string;
   event_id: string | null;
   transaction_date: string | null;
@@ -29,6 +30,7 @@ export default function IncomePage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterEvent, setFilterEvent] = useState("");
   const [filterMember, setFilterMember] = useState("");
+  const [markingTxnId, setMarkingTxnId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -135,17 +137,50 @@ export default function IncomePage() {
   }, [transactions, members]);
 
   function handleReceipt(txn: IncomeRow) {
+    if (!txn.transaction_date) {
+      alert("Mark this transaction as received before generating receipt.");
+      return;
+    }
     const eventInfo = txn.event_id ? events[txn.event_id] : null;
     const receiptNo = txn.id.slice(0, 8).toUpperCase();
     generateReceipt({
       receiptNo,
       eventDate: eventInfo?.date ? formatDate(eventInfo.date) : null,
-      transactionDate: formatDate(txn.transaction_date || txn.created_at),
+      transactionDate: formatDate(txn.transaction_date),
       donorName: txn.donor_name || "Anonymous",
       amount: Number(txn.amount),
       description: txn.description,
       eventName: eventInfo?.name || null,
     });
+  }
+
+  async function handleMarkReceived(txn: IncomeRow) {
+    const today = new Date().toISOString().split("T")[0];
+    const pickedDate = window.prompt(
+      "Set received date (YYYY-MM-DD)",
+      txn.transaction_date || today
+    );
+    if (pickedDate === null) return;
+    const finalDate = pickedDate || today;
+
+    setMarkingTxnId(txn.id);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ transaction_date: finalDate })
+      .eq("id", txn.id);
+
+    if (error) {
+      alert("Failed to update transaction: " + error.message);
+      setMarkingTxnId(null);
+      return;
+    }
+
+    setTransactions((prev) =>
+      prev.map((item) =>
+        item.id === txn.id ? { ...item, transaction_date: finalDate } : item
+      )
+    );
+    setMarkingTxnId(null);
   }
 
   if (loading) {
@@ -242,7 +277,9 @@ export default function IncomePage() {
                 <th className="px-4 py-3 text-left font-medium text-gray-600">Date</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">Donor</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">Event</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">Mode</th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">Description</th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Amount</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-600">Receipt</th>
               </tr>
@@ -250,10 +287,14 @@ export default function IncomePage() {
             <tbody className="divide-y divide-gray-50">
               {filtered.map((txn) => {
                 const eventInfo = txn.event_id ? events[txn.event_id] : null;
+                const pending = !txn.transaction_date;
                 return (
-                  <tr key={txn.id} className="hover:bg-gray-50 transition">
+                  <tr
+                    key={txn.id}
+                    className={`transition ${pending ? "bg-amber-50/70 hover:bg-amber-100/70" : "hover:bg-gray-50"}`}
+                  >
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                      {formatDate(txn.transaction_date || txn.created_at)}
+                      {txn.transaction_date ? formatDate(txn.transaction_date) : "—"}
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-800">
                       {txn.donor_name || "—"}
@@ -262,7 +303,33 @@ export default function IncomePage() {
                       {eventInfo?.name || "—"}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
+                      <span
+                        className={`px-2 py-0.5 rounded-full border text-xs font-medium ${
+                          txn.payment_mode === "upi"
+                            ? "text-indigo-700 border-indigo-200 bg-indigo-50"
+                            : "text-emerald-700 border-emerald-200 bg-emerald-50"
+                        }`}
+                      >
+                        {(txn.payment_mode || "cash").toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
                       {txn.description || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {pending ? (
+                        <button
+                          onClick={() => handleMarkReceived(txn)}
+                          disabled={markingTxnId === txn.id}
+                          className="text-xs px-2 py-1 rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition disabled:opacity-60"
+                        >
+                          {markingTxnId === txn.id ? "Saving..." : "Receivable"}
+                        </button>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded-md bg-green-100 text-green-700">
+                          Received
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-green-700">
                       {formatCurrency(Number(txn.amount))}
@@ -270,7 +337,8 @@ export default function IncomePage() {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleReceipt(txn)}
-                        className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg transition"
+                        disabled={!txn.transaction_date}
+                        className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Generate Receipt"
                       >
                         <FileText className="w-4 h-4" />
@@ -287,8 +355,12 @@ export default function IncomePage() {
         <div className="md:hidden divide-y divide-gray-100">
           {filtered.map((txn) => {
             const eventInfo = txn.event_id ? events[txn.event_id] : null;
+            const pending = !txn.transaction_date;
             return (
-              <div key={txn.id} className="px-4 py-3">
+              <div
+                key={txn.id}
+                className={`px-4 py-3 ${pending ? "bg-amber-50/70" : ""}`}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">
@@ -296,7 +368,26 @@ export default function IncomePage() {
                     </p>
                     <div className="flex flex-wrap gap-x-3 mt-1 text-xs text-gray-500">
                       {eventInfo && <span>{eventInfo.name}</span>}
-                      <span>{formatDate(txn.transaction_date || txn.created_at)}</span>
+                      {txn.transaction_date ? (
+                        <span>{formatDate(txn.transaction_date)}</span>
+                      ) : (
+                        <button
+                          onClick={() => handleMarkReceived(txn)}
+                          disabled={markingTxnId === txn.id}
+                          className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800"
+                        >
+                          {markingTxnId === txn.id ? "Saving..." : "Receivable"}
+                        </button>
+                      )}
+                      <span
+                        className={`px-1.5 py-0.5 rounded-full border text-[11px] font-medium ${
+                          txn.payment_mode === "upi"
+                            ? "text-indigo-700 border-indigo-200 bg-indigo-50"
+                            : "text-emerald-700 border-emerald-200 bg-emerald-50"
+                        }`}
+                      >
+                        {(txn.payment_mode || "cash").toUpperCase()}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -305,7 +396,8 @@ export default function IncomePage() {
                     </span>
                     <button
                       onClick={() => handleReceipt(txn)}
-                      className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg transition"
+                      disabled={!txn.transaction_date}
+                      className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Receipt"
                     >
                       <FileText className="w-4 h-4" />

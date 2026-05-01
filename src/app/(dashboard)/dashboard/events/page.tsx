@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { EventsList } from "@/components/events/events-list";
 import { Loader2 } from "lucide-react";
@@ -13,36 +13,36 @@ export default function EventsPage() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const supabase = createClient();
 
-  useEffect(() => {
-    async function fetchData() {
-      const [
-        { data: evts },
-        { data: cats },
-        { data: { user } },
-      ] = await Promise.all([
-        supabase.from("events").select("*, category:categories(name)").order("date", { ascending: false }),
-        supabase.from("categories").select("*").order("name"),
-        supabase.auth.getUser(),
-      ]);
+  const fetchData = useCallback(async () => {
+    const [
+      { data: evts },
+      { data: cats },
+      { data: { user } },
+    ] = await Promise.all([
+      supabase.from("events").select("*, category:categories(name)").order("date", { ascending: false }),
+      supabase.from("categories").select("*").order("name"),
+      supabase.auth.getUser(),
+    ]);
 
-      setEvents(evts || []);
-      setCategories(cats || []);
+    setEvents(evts || []);
+    setCategories(cats || []);
 
-      if (user) {
-        const { data: member } = await supabase
-          .from("members")
-          .select("role")
-          .eq("auth_user_id", user.id)
-          .single();
-        setIsAdmin(member?.role === "admin" || member?.role === "super-admin");
-        setIsSuperAdmin(member?.role === "super-admin");
-      }
-
-      setLoading(false);
+    if (user) {
+      const { data: member } = await supabase
+        .from("members")
+        .select("role")
+        .eq("auth_user_id", user.id)
+        .single();
+      setIsAdmin(member?.role === "admin" || member?.role === "super-admin");
+      setIsSuperAdmin(member?.role === "super-admin");
     }
 
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -55,7 +55,13 @@ export default function EventsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">Events</h1>
-      <EventsList events={events} categories={categories} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} />
+      <EventsList
+        events={events}
+        categories={categories}
+        isAdmin={isAdmin}
+        isSuperAdmin={isSuperAdmin}
+        onEventsChanged={fetchData}
+      />
     </div>
   );
 }

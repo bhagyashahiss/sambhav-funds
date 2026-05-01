@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import { Category } from "@/lib/types";
 import { Plus, Calendar, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -22,9 +21,10 @@ interface Props {
   categories: Category[];
   isAdmin: boolean;
   isSuperAdmin?: boolean;
+  onEventsChanged?: () => Promise<void> | void;
 }
 
-export function EventsList({ events, categories, isAdmin, isSuperAdmin }: Props) {
+export function EventsList({ events, categories, isAdmin, isSuperAdmin, onEventsChanged }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
@@ -33,19 +33,24 @@ export function EventsList({ events, categories, isAdmin, isSuperAdmin }: Props)
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
   const [editingEvent, setEditingEvent] = useState<EventRow | null>(null);
-  const router = useRouter();
   const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    await supabase.from("events").insert({
+    const { error } = await supabase.from("events").insert({
       name,
       date,
       category_id: categoryId,
       description: description || null,
     });
+
+    if (error) {
+      setLoading(false);
+      alert("Failed to create event: " + error.message);
+      return;
+    }
 
     setName("");
     setDate("");
@@ -53,7 +58,7 @@ export function EventsList({ events, categories, isAdmin, isSuperAdmin }: Props)
     setDescription("");
     setShowForm(false);
     setLoading(false);
-    router.refresh();
+    await onEventsChanged?.();
   }
 
   function startEditEvent(event: EventRow) {
@@ -70,7 +75,7 @@ export function EventsList({ events, categories, isAdmin, isSuperAdmin }: Props)
     if (!editingEvent) return;
     setLoading(true);
 
-    await supabase
+    const { error } = await supabase
       .from("events")
       .update({
         name,
@@ -80,6 +85,12 @@ export function EventsList({ events, categories, isAdmin, isSuperAdmin }: Props)
       })
       .eq("id", editingEvent.id);
 
+    if (error) {
+      setLoading(false);
+      alert("Failed to update event: " + error.message);
+      return;
+    }
+
     setName("");
     setDate("");
     setCategoryId("");
@@ -87,13 +98,17 @@ export function EventsList({ events, categories, isAdmin, isSuperAdmin }: Props)
     setShowForm(false);
     setEditingEvent(null);
     setLoading(false);
-    router.refresh();
+    await onEventsChanged?.();
   }
 
   async function handleDeleteEvent(eventId: string) {
     if (!confirm("Delete this event and all its transactions?")) return;
-    await supabase.from("events").delete().eq("id", eventId);
-    router.refresh();
+    const { error } = await supabase.from("events").delete().eq("id", eventId);
+    if (error) {
+      alert("Failed to delete event: " + error.message);
+      return;
+    }
+    await onEventsChanged?.();
   }
 
   const filtered = filter

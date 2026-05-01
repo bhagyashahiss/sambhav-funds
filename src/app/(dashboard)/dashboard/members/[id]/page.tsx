@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -13,6 +13,8 @@ import {
   Loader2,
 } from "lucide-react";
 
+type MemberScope = "collected" | "spent" | "receivable" | "payable" | "all";
+
 export default function MemberDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -20,6 +22,7 @@ export default function MemberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [member, setMember] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [scope, setScope] = useState<MemberScope>("all");
 
   useEffect(() => {
     async function fetchData() {
@@ -51,6 +54,17 @@ export default function MemberDetailPage() {
     fetchData();
   }, [id]);
 
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((txn) => {
+      const settled = Boolean(txn.transaction_date);
+      if (scope === "collected") return txn.type === "income" && settled;
+      if (scope === "spent") return txn.type === "expense" && settled;
+      if (scope === "receivable") return txn.type === "income" && !settled;
+      if (scope === "payable") return txn.type === "expense" && !settled;
+      return true;
+    });
+  }, [transactions, scope]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -64,10 +78,16 @@ export default function MemberDetailPage() {
   }
 
   const totalCollected = transactions
-    .filter((t) => t.type === "income")
+    .filter((t) => t.type === "income" && Boolean(t.transaction_date))
     .reduce((s, t) => s + Number(t.amount), 0);
   const totalSpent = transactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && Boolean(t.transaction_date))
+    .reduce((s, t) => s + Number(t.amount), 0);
+  const totalReceivable = transactions
+    .filter((t) => t.type === "income" && !t.transaction_date)
+    .reduce((s, t) => s + Number(t.amount), 0);
+  const totalPayable = transactions
+    .filter((t) => t.type === "expense" && !t.transaction_date)
     .reduce((s, t) => s + Number(t.amount), 0);
   const holding = totalCollected - totalSpent;
 
@@ -89,28 +109,82 @@ export default function MemberDetailPage() {
       </div>
 
       {/* Balance Cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-green-50 rounded-lg p-3 text-center">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <button
+          type="button"
+          onClick={() => setScope("collected")}
+          className={`rounded-lg p-3 text-center border transition ${
+            scope === "collected"
+              ? "bg-green-100 border-green-300"
+              : "bg-green-50 border-green-100 hover:border-green-200"
+          }`}
+        >
           <TrendingUp className="w-4 h-4 text-green-600 mx-auto" />
-          <p className="text-xs text-green-700 mt-1">Collected</p>
+          <p className="text-xs text-green-700 mt-1">Collected (Received)</p>
           <p className="text-sm font-bold text-green-800">
             {formatCurrency(totalCollected)}
           </p>
-        </div>
-        <div className="bg-red-50 rounded-lg p-3 text-center">
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope("spent")}
+          className={`rounded-lg p-3 text-center border transition ${
+            scope === "spent"
+              ? "bg-red-100 border-red-300"
+              : "bg-red-50 border-red-100 hover:border-red-200"
+          }`}
+        >
           <TrendingDown className="w-4 h-4 text-red-600 mx-auto" />
-          <p className="text-xs text-red-700 mt-1">Spent</p>
+          <p className="text-xs text-red-700 mt-1">Spent (Paid)</p>
           <p className="text-sm font-bold text-red-800">
             {formatCurrency(totalSpent)}
           </p>
-        </div>
-        <div className="bg-blue-50 rounded-lg p-3 text-center">
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope("all")}
+          className={`rounded-lg p-3 text-center border transition ${
+            scope === "all"
+              ? "bg-blue-100 border-blue-300"
+              : "bg-blue-50 border-blue-100 hover:border-blue-200"
+          }`}
+        >
           <Wallet className="w-4 h-4 text-blue-600 mx-auto" />
-          <p className="text-xs text-blue-700 mt-1">Holding</p>
+          <p className="text-xs text-blue-700 mt-1">Holding (Settled)</p>
           <p className="text-sm font-bold text-blue-800">
             {formatCurrency(holding)}
           </p>
-        </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope("receivable")}
+          className={`rounded-lg p-3 text-center border transition ${
+            scope === "receivable"
+              ? "bg-amber-100 border-amber-300"
+              : "bg-amber-50 border-amber-100 hover:border-amber-200"
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 text-amber-700 mx-auto" />
+          <p className="text-xs text-amber-700 mt-1">Receivable</p>
+          <p className="text-sm font-bold text-amber-800">
+            {formatCurrency(totalReceivable)}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setScope("payable")}
+          className={`rounded-lg p-3 text-center border transition ${
+            scope === "payable"
+              ? "bg-orange-100 border-orange-300"
+              : "bg-orange-50 border-orange-100 hover:border-orange-200"
+          }`}
+        >
+          <TrendingDown className="w-4 h-4 text-orange-700 mx-auto" />
+          <p className="text-xs text-orange-700 mt-1">Payable</p>
+          <p className="text-sm font-bold text-orange-800">
+            {formatCurrency(totalPayable)}
+          </p>
+        </button>
       </div>
 
       {/* Transaction History */}
@@ -119,8 +193,17 @@ export default function MemberDetailPage() {
           Transaction History
         </h2>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
-          {(transactions || []).map((txn: any) => (
-            <div key={txn.id} className="px-4 py-3">
+          {(filteredTransactions || []).map((txn: any) => (
+            <div
+              key={txn.id}
+              className={`px-4 py-3 ${
+                !txn.transaction_date
+                  ? txn.type === "income"
+                    ? "bg-amber-50"
+                    : "bg-orange-50"
+                  : ""
+              }`}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">
@@ -131,8 +214,17 @@ export default function MemberDetailPage() {
                   <p className="text-xs text-gray-500">
                     {txn.event?.name || "General"}{" "}
                     {txn.event?.category?.name && `(${txn.event.category.name})`}{" "}
-                    • {formatDate(txn.created_at)}
+                    • {txn.transaction_date ? formatDate(txn.transaction_date) : "Pending"}
                   </p>
+                  {!txn.transaction_date && (
+                    <p
+                      className={`text-xs font-medium mt-1 ${
+                        txn.type === "income" ? "text-amber-700" : "text-orange-700"
+                      }`}
+                    >
+                      {txn.type === "income" ? "Receivable (Pending)" : "Payable (Pending)"}
+                    </p>
+                  )}
                 </div>
                 <span
                   className={`text-sm font-semibold ${
@@ -158,9 +250,9 @@ export default function MemberDetailPage() {
               )}
             </div>
           ))}
-          {transactions.length === 0 && (
+          {filteredTransactions.length === 0 && (
             <p className="px-4 py-6 text-sm text-gray-500 text-center">
-              No transactions for this member.
+              No transactions for this filter.
             </p>
           )}
         </div>

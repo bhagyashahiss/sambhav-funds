@@ -35,15 +35,18 @@ export interface ExpenseItemMaster {
 }
 
 export type TransactionType = "income" | "expense";
+export type PaymentMode = "cash" | "upi";
 
 export interface Transaction {
   id: string;
   event_id: string | null;
   member_id: string;
   type: TransactionType;
+  payment_mode: PaymentMode | null;
   amount: number;
   description: string | null;
   donor_name: string | null;
+  transaction_date: string | null;
   created_at: string;
   created_by: string;
   // joined

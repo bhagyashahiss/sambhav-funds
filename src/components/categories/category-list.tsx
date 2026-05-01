@@ -8,10 +8,10 @@ import { Plus, Pencil } from "lucide-react";
 
 interface Props {
   categories: Category[];
-  isAdmin: boolean;
+  isSuperAdmin: boolean;
 }
 
-export function CategoryList({ categories, isAdmin }: Props) {
+export function CategoryList({ categories, isSuperAdmin }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -52,7 +52,7 @@ export function CategoryList({ categories, isAdmin }: Props) {
 
   return (
     <div className="space-y-4">
-      {isAdmin && (
+      {isSuperAdmin && (
         <button
           onClick={() => {
             setShowForm(!showForm);
@@ -67,7 +67,7 @@ export function CategoryList({ categories, isAdmin }: Props) {
         </button>
       )}
 
-      {showForm && isAdmin && (
+      {showForm && isSuperAdmin && (
         <form
           onSubmit={handleSubmit}
           className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3"
@@ -121,7 +121,7 @@ export function CategoryList({ categories, isAdmin }: Props) {
                 <p className="text-xs text-gray-500">{cat.description}</p>
               )}
             </div>
-            {isAdmin && (
+            {isSuperAdmin && (
               <button
                 onClick={() => startEdit(cat)}
                 className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition"

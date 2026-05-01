@@ -24,6 +24,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpense, setTotalExpense] = useState(0);
+  const [totalReceivable, setTotalReceivable] = useState(0);
+  const [totalPayable, setTotalPayable] = useState(0);
   const [recentTxns, setRecentTxns] = useState<any[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
   const supabase = createClient();
@@ -31,15 +33,15 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchData() {
       const [incomeRes, expenseRes, recentRes, categoriesRes, allTxnRes, membersRes] = await Promise.all([
-        supabase.from("transactions").select("amount").eq("type", "income"),
-        supabase.from("transactions").select("amount").eq("type", "expense"),
+        supabase.from("transactions").select("amount, transaction_date").eq("type", "income"),
+        supabase.from("transactions").select("amount, transaction_date").eq("type", "expense"),
         supabase
           .from("transactions")
           .select("*")
           .order("created_at", { ascending: false })
           .limit(20),
         supabase.from("categories").select("*").order("name"),
-        supabase.from("transactions").select("type, amount, event_id"),
+        supabase.from("transactions").select("type, amount, event_id, transaction_date"),
         supabase.from("members").select("id, name"),
       ]);
 
@@ -80,10 +82,27 @@ export default function DashboardPage() {
         });
       }
 
-      const income = incomeData?.reduce((s, t) => s + Number(t.amount), 0) || 0;
-      const expense = expenseData?.reduce((s, t) => s + Number(t.amount), 0) || 0;
+      // Settled totals exclude pending receivable/payable entries.
+      const income =
+        incomeData
+          ?.filter((t: any) => Boolean(t.transaction_date))
+          .reduce((s, t) => s + Number(t.amount), 0) || 0;
+      const expense =
+        expenseData
+          ?.filter((t: any) => Boolean(t.transaction_date))
+          .reduce((s, t) => s + Number(t.amount), 0) || 0;
+      const receivable =
+        incomeData
+          ?.filter((t: any) => !t.transaction_date)
+          .reduce((s, t) => s + Number(t.amount), 0) || 0;
+      const payable =
+        expenseData
+          ?.filter((t: any) => !t.transaction_date)
+          .reduce((s, t) => s + Number(t.amount), 0) || 0;
       setTotalIncome(income);
       setTotalExpense(expense);
+      setTotalReceivable(receivable);
+      setTotalPayable(payable);
       setRecentTxns(
         (recent || [])
           .filter((t: any) => !t.description?.startsWith("Transfer:"))
@@ -97,7 +116,7 @@ export default function DashboardPage() {
 
       const catSummaries = (categories || []).map((cat: any) => {
         const catTxns = (allTxns || []).filter(
-          (t: any) => eventCategoryMap[t.event_id] === cat.id
+          (t: any) => eventCategoryMap[t.event_id] === cat.id && Boolean(t.transaction_date)
         );
         const catIncome = catTxns
           .filter((t: any) => t.type === "income")
@@ -129,34 +148,40 @@ export default function DashboardPage() {
       <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Link
+          href="/dashboard/transactions?scope=income"
+          className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:border-green-200 hover:shadow-md transition block"
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
               <TrendingUp className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Income</p>
+              <p className="text-sm text-gray-500">Total Income (Received)</p>
               <p className="text-xl font-bold text-green-700">
                 {formatCurrency(totalIncome)}
               </p>
             </div>
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <Link
+          href="/dashboard/transactions?scope=expense"
+          className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:border-red-200 hover:shadow-md transition block"
+        >
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-100 rounded-lg">
               <TrendingDown className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Expense</p>
+              <p className="text-sm text-gray-500">Total Expense (Paid)</p>
               <p className="text-xl font-bold text-red-700">
                 {formatCurrency(totalExpense)}
               </p>
             </div>
           </div>
-        </div>
+        </Link>
 
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
           <div className="flex items-center gap-3">
@@ -164,13 +189,47 @@ export default function DashboardPage() {
               <Wallet className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Net Balance</p>
+              <p className="text-sm text-gray-500">Net Balance (Settled)</p>
               <p className="text-xl font-bold text-blue-700">
                 {formatCurrency(netBalance)}
               </p>
             </div>
           </div>
         </div>
+
+        <Link
+          href="/dashboard/transactions?scope=receivable"
+          className="bg-amber-50 rounded-xl p-5 shadow-sm border border-amber-100 hover:border-amber-300 hover:shadow-md transition block"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-100 rounded-lg">
+              <TrendingUp className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-sm text-amber-700">Total Receivable</p>
+              <p className="text-xl font-bold text-amber-800">
+                {formatCurrency(totalReceivable)}
+              </p>
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          href="/dashboard/transactions?scope=payable"
+          className="bg-orange-50 rounded-xl p-5 shadow-sm border border-orange-100 hover:border-orange-300 hover:shadow-md transition block"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <TrendingDown className="w-5 h-5 text-orange-700" />
+            </div>
+            <div>
+              <p className="text-sm text-orange-700">Total Payable</p>
+              <p className="text-xl font-bold text-orange-800">
+                {formatCurrency(totalPayable)}
+              </p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Category Summaries */}
@@ -221,7 +280,13 @@ export default function DashboardPage() {
           {recentTxns.map((txn: any) => (
             <div
               key={txn.id}
-              className="px-4 py-3 flex items-center justify-between"
+              className={`px-4 py-3 flex items-center justify-between ${
+                !txn.transaction_date
+                  ? txn.type === "income"
+                    ? "bg-amber-50"
+                    : "bg-orange-50"
+                  : ""
+              }`}
             >
               <div>
                 <p className="text-sm font-medium text-gray-800">
@@ -232,6 +297,15 @@ export default function DashboardPage() {
                 <p className="text-xs text-gray-500">
                   {txn.member?.name} • {txn.event?.name || "General"}
                 </p>
+                {!txn.transaction_date && (
+                  <p
+                    className={`text-xs font-medium mt-1 ${
+                      txn.type === "income" ? "text-amber-700" : "text-orange-700"
+                    }`}
+                  >
+                    {txn.type === "income" ? "Receivable (Pending)" : "Payable (Pending)"}
+                  </p>
+                )}
               </div>
               <span
                 className={`text-sm font-semibold ${
