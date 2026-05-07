@@ -190,29 +190,34 @@ export default function IncomePage() {
     });
 
     const filename = `Receipt_${receiptNo}_${txn.donor_name?.replace(/\s+/g, "_") || "donor"}.pdf`;
+    const whatsappPhone = phone.startsWith("91") ? phone : "91" + phone;
+    const shareText = `Jai Jinendra 🙏\n\nThank you for your contribution of Rs. ${Number(txn.amount).toLocaleString("en-IN")} towards ${eventInfo?.name || "Sambhav Shanti Yuva Group"}.\n\nReceipt No: ${receiptNo}\n\n- Sambhav Shanti Yuva Group`;
 
-    // Try Web Share API with file
+    // Try Web Share API with file attachment (user picks WhatsApp from share sheet)
     if (navigator.share && navigator.canShare) {
       try {
         const file = new File([blob], filename, { type: "application/pdf" });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
             files: [file],
-            title: "Receipt from Sambhav Shanti Yuva Group",
-            text: `Receipt for Rs. ${Number(txn.amount).toLocaleString("en-IN")}`,
+            text: shareText,
           });
           return;
         }
       } catch {
-        // Fallback below
+        // User cancelled or error — fall through to wa.me
       }
     }
 
-    // Fallback: open WhatsApp with message (user attaches PDF manually)
-    const whatsappPhone = phone.startsWith("91") ? phone : "91" + phone;
-    const message = encodeURIComponent(
-      `Jai Jinendra 🙏\n\nThank you for your contribution of Rs. ${Number(txn.amount).toLocaleString("en-IN")} towards ${eventInfo?.name || "Sambhav Shanti Yuva Group"}.\n\nReceipt No: ${receiptNo}\n\n- Sambhav Shanti Yuva Group`
-    );
+    // Fallback: download PDF + open WhatsApp chat with message
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    const message = encodeURIComponent(shareText);
     window.open(`https://wa.me/${whatsappPhone}?text=${message}`, "_blank");
   }
 
