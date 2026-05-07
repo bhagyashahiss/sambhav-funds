@@ -28,6 +28,13 @@ export async function generateReceipt(data: ReceiptData) {
   const grayText: [number, number, number] = [100, 100, 100];
   const accentColor: [number, number, number] = [59, 130, 246]; // blue accent
 
+  // "|| Shree Sambhavnathay Namh: ||" at top center
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...goldAccent);
+  doc.text("|| Shree Sambhavnathay Namh: ||", pageWidth / 2, y, { align: "center" });
+  y += 5;
+
   // Try to load logo
   try {
     const logoImg = await loadImage("/icons/photo.jpg");
@@ -77,7 +84,7 @@ export async function generateReceipt(data: ReceiptData) {
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...grayText);
-  doc.text("Received with thanks from:", margin, y);
+  doc.text("Received with & thanks from:", margin, y);
   y += 7;
 
   // Donor Name - wrap if needed

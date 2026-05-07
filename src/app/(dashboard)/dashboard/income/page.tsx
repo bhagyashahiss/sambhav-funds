@@ -191,25 +191,9 @@ export default function IncomePage() {
 
     const filename = `Receipt_${receiptNo}_${txn.donor_name?.replace(/\s+/g, "_") || "donor"}.pdf`;
     const whatsappPhone = phone.startsWith("91") ? phone : "91" + phone;
-    const shareText = `Jai Jinendra 🙏\n\nThank you for your contribution of Rs. ${Number(txn.amount).toLocaleString("en-IN")} towards ${eventInfo?.name || "Sambhav Shanti Yuva Group"}.\n\nReceipt No: ${receiptNo}\n\n- Sambhav Shanti Yuva Group`;
+    const shareText = `Pranam 🙏\n\nThank you for your contribution of Rs. ${Number(txn.amount).toLocaleString("en-IN")} towards ${eventInfo?.name || "Sambhav Shanti Yuva Group"}.\n\nReceipt No: ${receiptNo}\n\n- Sambhav Shanti Yuva Group`;
 
-    // Try Web Share API with file attachment (user picks WhatsApp from share sheet)
-    if (navigator.share && navigator.canShare) {
-      try {
-        const file = new File([blob], filename, { type: "application/pdf" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            text: shareText,
-          });
-          return;
-        }
-      } catch {
-        // User cancelled or error — fall through to wa.me
-      }
-    }
-
-    // Fallback: download PDF + open WhatsApp chat with message
+    // Download the receipt PDF first
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -217,8 +201,9 @@ export default function IncomePage() {
     a.click();
     URL.revokeObjectURL(url);
 
+    // Open the specific WhatsApp chat with pre-filled message
     const message = encodeURIComponent(shareText);
-    window.open(`https://wa.me/${whatsappPhone}?text=${message}`, "_blank");
+    window.location.href = `https://api.whatsapp.com/send?phone=${whatsappPhone}&text=${message}`;
   }
 
   async function handleMarkReceived(txn: IncomeRow) {
