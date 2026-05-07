@@ -68,11 +68,13 @@ export function EventDetail({
   const [memberId, setMemberId] = useState("");
   const [amount, setAmount] = useState("");
   const [donorName, setDonorName] = useState("");
+  const [donorPhone, setDonorPhone] = useState("");
   const [description, setDescription] = useState("");
   const [paymentMode, setPaymentMode] = useState<"cash" | "upi">("cash");
   const [transactionDate, setTransactionDate] = useState("");
+  const [incidentDate, setIncidentDate] = useState("");
   const [lines, setLines] = useState<{ item_name: string; amount: string }[]>([]);
-  const [donorSuggestions, setDonorSuggestions] = useState<string[]>([]);
+  const [donorSuggestions, setDonorSuggestions] = useState<{ name: string; phone: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [settlingTxnId, setSettlingTxnId] = useState<string | null>(null);
   const supabase = createClient();
@@ -91,7 +93,7 @@ export function EventDetail({
     async function fetchDonorSuggestions() {
       const { data, error } = await supabase
         .from("transactions")
-        .select("donor_name")
+        .select("donor_name, donor_phone")
         .eq("type", "income")
         .not("donor_name", "is", null);
 
@@ -100,13 +102,18 @@ export function EventDetail({
         return;
       }
 
-      const donors = Array.from(
-        new Set(
-          (data || [])
-            .map((row: any) => (row.donor_name || "").trim())
-            .filter(Boolean)
-        )
-      );
+      // Build a map of donor name -> latest phone
+      const donorMap = new Map<string, string>();
+      (data || []).forEach((row: any) => {
+        const name = (row.donor_name || "").trim();
+        if (name && row.donor_phone) {
+          donorMap.set(name, row.donor_phone);
+        } else if (name && !donorMap.has(name)) {
+          donorMap.set(name, "");
+        }
+      });
+
+      const donors = Array.from(donorMap.entries()).map(([name, phone]) => ({ name, phone }));
 
       if (isMounted) {
         setDonorSuggestions(donors);
@@ -164,8 +171,10 @@ export function EventDetail({
         payment_mode: paymentMode,
         amount: txnAmount,
         donor_name: txnType === "income" ? donorName || null : null,
+        donor_phone: txnType === "income" && donorPhone ? "+91" + donorPhone.replace(/^\+91/, "") : null,
         description: description || null,
         transaction_date: transactionDate || null,
+        incident_date: incidentDate || null,
         created_by: currentMemberId,
       })
       .select()
@@ -194,10 +203,12 @@ export function EventDetail({
     // Reset form
     setAmount("");
     setDonorName("");
+    setDonorPhone("");
     setDescription("");
     setPaymentMode("cash");
     setMemberId("");
     setTransactionDate("");
+    setIncidentDate("");
     setLines([]);
     setShowForm(false);
     setLoading(false);
@@ -210,9 +221,11 @@ export function EventDetail({
     setTxnType(txn.type);
     setAmount(String(Number(txn.amount)));
     setDonorName(txn.donor_name || "");
+    setDonorPhone(((txn as any).donor_phone || "").replace(/^\+91/, ""));
     setDescription(txn.description || "");
     setPaymentMode(txn.payment_mode === "upi" ? "upi" : "cash");
     setTransactionDate(txn.transaction_date || "");
+    setIncidentDate((txn as any).incident_date || "");
     setMemberId(txn.member_id || "");
     setLines(txn.expense_lines.map((l) => ({ item_name: l.item_name, amount: String(Number(l.amount)) })));
     setShowForm(true);
@@ -236,8 +249,10 @@ export function EventDetail({
         payment_mode: paymentMode,
         amount: txnAmount,
         donor_name: txnType === "income" ? donorName || null : null,
+        donor_phone: txnType === "income" && donorPhone ? "+91" + donorPhone.replace(/^\+91/, "") : null,
         description: description || null,
         transaction_date: transactionDate || null,
+        incident_date: incidentDate || null,
       })
       .eq("id", editingTxn.id);
 
@@ -260,10 +275,12 @@ export function EventDetail({
 
     setAmount("");
     setDonorName("");
+    setDonorPhone("");
     setDescription("");
     setPaymentMode("cash");
     setMemberId("");
     setTransactionDate("");
+    setIncidentDate("");
     setLines([]);
     setShowForm(false);
     setEditingTxn(null);
@@ -432,13 +449,32 @@ export function EventDetail({
                 placeholder="Donor name (Labharthi)"
                 list="donor-names-list"
                 value={donorName}
-                onChange={(e) => setDonorName(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setDonorName(val);
+                  // Auto-populate phone if donor is selected from suggestions
+                  const match = donorSuggestions.find((d) => d.name === val);
+                  if (match && match.phone) {
+                    setDonorPhone(match.phone.replace(/^\+91/, ""));
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               />
+              <div className="flex items-center gap-1">
+                <span className="px-3 py-2 bg-gray-100 border border-gray-300 border-r-0 rounded-l-lg text-sm text-gray-600">+91</span>
+                <input
+                  type="tel"
+                  placeholder="Phone number"
+                  value={donorPhone}
+                  onChange={(e) => setDonorPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                  maxLength={10}
+                />
+              </div>
               {donorSuggestions.length > 0 && (
                 <datalist id="donor-names-list">
-                  {donorSuggestions.map((name) => (
-                    <option key={name} value={name} />
+                  {donorSuggestions.map((d) => (
+                    <option key={d.name} value={d.name} />
                   ))}
                 </datalist>
               )}
@@ -576,6 +612,22 @@ export function EventDetail({
             />
             <p className="text-xs text-gray-500 mt-1">
               Leave empty to keep this as receivable/payable.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Incident Date (shown as Event Date on receipt, defaults to Event Date)
+            </label>
+            <input
+              type="date"
+              value={incidentDate}
+              onChange={(e) => setIncidentDate(e.target.value)}
+              placeholder={event.date}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Leave empty to use the event date ({formatDate(event.date)}).
             </p>
           </div>
 

@@ -4,17 +4,19 @@ import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { generateReceipt } from "@/lib/generate-receipt";
-import { Loader2, Search, IndianRupee, FileText } from "lucide-react";
+import { Loader2, Search, IndianRupee, FileText, MessageCircle } from "lucide-react";
 
 interface IncomeRow {
   id: string;
   amount: number;
   donor_name: string | null;
+  donor_phone: string | null;
   description: string | null;
   payment_mode: "cash" | "upi" | null;
   member_id: string;
   event_id: string | null;
   transaction_date: string | null;
+  incident_date: string | null;
   created_at: string;
 }
 
@@ -41,6 +43,7 @@ export default function IncomePage() {
           .from("transactions")
           .select("*")
           .eq("type", "income")
+          .not("description", "like", "Transfer:%")
           .order("created_at", { ascending: false }),
         supabase.from("members").select("id, name"),
         supabase.from("events").select("id, name, date, category_id"),
@@ -143,15 +146,74 @@ export default function IncomePage() {
     }
     const eventInfo = txn.event_id ? events[txn.event_id] : null;
     const receiptNo = txn.id.slice(0, 8).toUpperCase();
+    // Use incident_date if available, fallback to event date, then transaction_date
+    const eventDate = txn.incident_date
+      ? formatDate(txn.incident_date)
+      : eventInfo?.date
+        ? formatDate(eventInfo.date)
+        : formatDate(txn.transaction_date);
     generateReceipt({
       receiptNo,
-      eventDate: eventInfo?.date ? formatDate(eventInfo.date) : null,
-      transactionDate: formatDate(txn.transaction_date),
+      eventDate,
+      receivedOn: formatDate(txn.transaction_date),
       donorName: txn.donor_name || "Anonymous",
       amount: Number(txn.amount),
-      description: txn.description,
       eventName: eventInfo?.name || null,
     });
+  }
+
+  async function handleWhatsAppShare(txn: IncomeRow) {
+    if (!txn.transaction_date) {
+      alert("Mark this transaction as received before sharing.");
+      return;
+    }
+    const phone = txn.donor_phone?.replace(/\D/g, "") || "";
+    if (!phone) {
+      alert("No phone number available for this donor. Please add a phone number when recording income.");
+      return;
+    }
+    const eventInfo = txn.event_id ? events[txn.event_id] : null;
+    const receiptNo = txn.id.slice(0, 8).toUpperCase();
+    const eventDate = txn.incident_date
+      ? formatDate(txn.incident_date)
+      : eventInfo?.date
+        ? formatDate(eventInfo.date)
+        : formatDate(txn.transaction_date);
+
+    const blob = await generateReceipt({
+      receiptNo,
+      eventDate,
+      receivedOn: formatDate(txn.transaction_date!),
+      donorName: txn.donor_name || "Anonymous",
+      amount: Number(txn.amount),
+      eventName: eventInfo?.name || null,
+    });
+
+    const filename = `Receipt_${receiptNo}_${txn.donor_name?.replace(/\s+/g, "_") || "donor"}.pdf`;
+
+    // Try Web Share API with file
+    if (navigator.share && navigator.canShare) {
+      try {
+        const file = new File([blob], filename, { type: "application/pdf" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "Receipt from Sambhav Shanti Yuva Group",
+            text: `Receipt for Rs. ${Number(txn.amount).toLocaleString("en-IN")}`,
+          });
+          return;
+        }
+      } catch {
+        // Fallback below
+      }
+    }
+
+    // Fallback: open WhatsApp with message (user attaches PDF manually)
+    const whatsappPhone = phone.startsWith("91") ? phone : "91" + phone;
+    const message = encodeURIComponent(
+      `Jai Jinendra 🙏\n\nThank you for your contribution of Rs. ${Number(txn.amount).toLocaleString("en-IN")} towards ${eventInfo?.name || "Sambhav Shanti Yuva Group"}.\n\nReceipt No: ${receiptNo}\n\n- Sambhav Shanti Yuva Group`
+    );
+    window.open(`https://wa.me/${whatsappPhone}?text=${message}`, "_blank");
   }
 
   async function handleMarkReceived(txn: IncomeRow) {
@@ -282,6 +344,7 @@ export default function IncomePage() {
                 <th className="px-4 py-3 text-left font-medium text-gray-600">Status</th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">Amount</th>
                 <th className="px-4 py-3 text-center font-medium text-gray-600">Receipt</th>
+                <th className="px-4 py-3 text-center font-medium text-gray-600">Share</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -344,6 +407,16 @@ export default function IncomePage() {
                         <FileText className="w-4 h-4" />
                       </button>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleWhatsAppShare(txn)}
+                        disabled={!txn.transaction_date || !txn.donor_phone}
+                        className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={txn.donor_phone ? "Share via WhatsApp" : "No phone number"}
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -401,6 +474,14 @@ export default function IncomePage() {
                       title="Receipt"
                     >
                       <FileText className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleWhatsAppShare(txn)}
+                      disabled={!txn.transaction_date || !txn.donor_phone}
+                      className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={txn.donor_phone ? "Share via WhatsApp" : "No phone number"}
+                    >
+                      <MessageCircle className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

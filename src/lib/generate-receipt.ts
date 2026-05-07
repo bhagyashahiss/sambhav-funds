@@ -2,11 +2,10 @@ import { jsPDF } from "jspdf";
 
 interface ReceiptData {
   receiptNo: string;
-  eventDate: string | null;
-  transactionDate: string;
+  eventDate: string;
+  receivedOn: string;
   donorName: string;
   amount: number;
-  description: string | null;
   eventName: string | null;
 }
 
@@ -18,124 +17,161 @@ export async function generateReceipt(data: ReceiptData) {
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 15;
-  let y = 15;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  let y = 12;
+
+  // Colors
+  const titleBlue: [number, number, number] = [20, 50, 120]; // royal blue for org name
+  const goldAccent: [number, number, number] = [185, 145, 20]; // gold for decorative accents
+  const darkText: [number, number, number] = [30, 30, 30];
+  const grayText: [number, number, number] = [100, 100, 100];
+  const accentColor: [number, number, number] = [59, 130, 246]; // blue accent
 
   // Try to load logo
   try {
     const logoImg = await loadImage("/icons/photo.jpg");
-    doc.addImage(logoImg, "JPEG", margin, y, 20, 20);
+    doc.addImage(logoImg, "JPEG", margin, y, 18, 18);
   } catch {
     // Logo not available, skip
   }
 
-  // Organization name
-  doc.setFontSize(16);
+  // Organization name in Royal Blue with gold underline
+  doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
-  doc.text("Sambhav Shanti Yuva Group", pageWidth / 2, y + 8, { align: "center" });
+  doc.setTextColor(...titleBlue);
+  doc.text("Sambhav Shanti Yuva Group", pageWidth / 2, y + 7, { align: "center" });
+  // Gold decorative line under title
+  doc.setDrawColor(...goldAccent);
+  doc.setLineWidth(0.6);
+  const titleW = doc.getTextWidth("Sambhav Shanti Yuva Group");
+  doc.line((pageWidth - titleW) / 2, y + 9, (pageWidth + titleW) / 2, y + 9);
 
-  doc.setFontSize(9);
+  // Address
+  doc.setTextColor(...grayText);
+  doc.setFontSize(7);
   doc.setFont("helvetica", "normal");
-  doc.text("Donation Receipt", pageWidth / 2, y + 15, { align: "center" });
+  doc.text("Shree Purushottam Park Jain Sangh, Carter Road 4, Borivali East", pageWidth / 2, y + 13, { align: "center" });
+  doc.text("Contact: +91 9082557642 | Email: sambhavshanti.ssyg@gmail.com", pageWidth / 2, y + 17, { align: "center" });
 
-  y += 28;
+  y += 24;
 
   // Divider line
-  doc.setDrawColor(59, 130, 246);
-  doc.setLineWidth(0.8);
+  doc.setDrawColor(...accentColor);
+  doc.setLineWidth(0.7);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 10;
+  y += 8;
 
-  // Receipt number and dates
+  // Receipt number and date row
+  doc.setTextColor(...darkText);
   doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.text(`Receipt No: ${data.receiptNo}`, margin, y);
-  doc.text(`Received On: ${data.transactionDate}`, pageWidth - margin, y, { align: "right" });
-  y += 7;
-  if (data.eventDate) {
-    doc.text(`Event Date: ${data.eventDate}`, pageWidth - margin, y, { align: "right" });
-  }
-  y += 10;
-
-  // Main content
-  doc.setFontSize(11);
+  doc.text(`Event Date: ${data.eventDate}`, pageWidth - margin, y, { align: "right" });
+  y += 6;
   doc.setFont("helvetica", "normal");
+  doc.text(`Received On: ${data.receivedOn}`, pageWidth - margin, y, { align: "right" });
+  y += 10;
 
   // Received from
-  doc.text("Received from:", margin, y);
-  doc.setFont("helvetica", "bold");
-  doc.text(data.donorName || "Anonymous", margin + 35, y);
-  y += 10;
-
-  // Amount
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
-  doc.text("Amount:", margin, y);
+  doc.setTextColor(...grayText);
+  doc.text("Received with thanks from:", margin, y);
+  y += 7;
+
+  // Donor Name - wrap if needed
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
-  const amountStr = `Rs. ${data.amount.toLocaleString("en-IN")}`;
-  doc.text(amountStr, margin + 35, y);
-  y += 10;
+  doc.setTextColor(...darkText);
+  const nameLines = doc.splitTextToSize(data.donorName || "Anonymous", pageWidth - margin * 2);
+  doc.text(nameLines, margin, y);
+  y += nameLines.length * 6 + 4;
+
+  // Amount
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...grayText);
+  doc.text("Amount:", margin, y);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(...titleBlue);
+  const amountStr = `Rs. ${data.amount.toLocaleString("en-IN")}/-`;
+  doc.text(amountStr, margin + 22, y);
+  y += 8;
 
   // Amount in words
   doc.setFontSize(9);
   doc.setFont("helvetica", "italic");
+  doc.setTextColor(...grayText);
   doc.text(`(${numberToWords(data.amount)} Rupees Only)`, margin, y);
-  y += 12;
+  y += 10;
 
   // Event
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
   if (data.eventName) {
-    doc.text("For Event:", margin, y);
-    doc.setFont("helvetica", "bold");
-    doc.text(data.eventName, margin + 35, y);
-    y += 10;
-  }
-
-  // Description
-  if (data.description) {
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Description:", margin, y);
+    doc.setTextColor(...grayText);
+    doc.text("Towards:", margin, y);
     doc.setFont("helvetica", "bold");
-    const descLines = doc.splitTextToSize(data.description, pageWidth - margin * 2 - 35);
-    doc.text(descLines, margin + 35, y);
-    y += descLines.length * 6 + 4;
+    doc.setTextColor(...darkText);
+    const eventLines = doc.splitTextToSize(data.eventName, pageWidth - margin * 2 - 22);
+    doc.text(eventLines, margin + 22, y);
+    y += eventLines.length * 5 + 6;
   }
 
-  y += 15;
+  y += 4;
 
-  // Divider
+  // Thin divider
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
   doc.line(margin, y, pageWidth - margin, y);
-  y += 12;
+  y += 8;
 
-  // Received by (hardcoded)
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Received by:", margin, y);
-  doc.setFont("helvetica", "bold");
-  doc.text("Sambhav Shanti Yuva Group", margin, y + 6);
-
-  // Signature line with SSYG
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text("SSYG", pageWidth - margin - 22, y + 2, { align: "center" });
-  doc.setFont("helvetica", "normal");
+  // Remarks
   doc.setFontSize(8);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(...grayText);
+  const remarks = "We appreciate your contribution towards JinShashan. We assure you that funds shall be only utilized towards development of Jinshasan.";
+  const remarkLines = doc.splitTextToSize(remarks, pageWidth - margin * 2);
+  doc.text(remarkLines, margin, y);
+  y += remarkLines.length * 4 + 8;
+
+  // Signature area
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...darkText);
+  doc.text("SSYG", pageWidth - margin - 20, y + 2, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
   doc.setDrawColor(150, 150, 150);
-  doc.line(pageWidth - margin - 45, y + 5, pageWidth - margin, y + 5);
-  doc.text("Authorized Signature", pageWidth - margin - 22, y + 10, { align: "center" });
+  doc.line(pageWidth - margin - 40, y + 5, pageWidth - margin, y + 5);
+  doc.setTextColor(...grayText);
+  doc.text("Authorized Signature", pageWidth - margin - 20, y + 10, { align: "center" });
+
+  // WhatsApp QR Code (bottom-left area)
+  try {
+    const qrImg = await loadImage("/icons/whatsapp-qr.png");
+    doc.addImage(qrImg, "PNG", margin, y - 2, 22, 22);
+    doc.setFontSize(6);
+    doc.setTextColor(...grayText);
+    doc.text("Scan to connect on WhatsApp", margin + 11, y + 22, { align: "center" });
+  } catch {
+    // QR not available, skip
+  }
 
   // Footer
-  const footerY = doc.internal.pageSize.getHeight() - 12;
-  doc.setFontSize(7);
-  doc.setTextColor(130, 130, 130);
+  const footerY = pageHeight - 10;
+  doc.setFontSize(6);
+  doc.setTextColor(150, 150, 150);
   doc.text("This is a computer-generated receipt.", pageWidth / 2, footerY, { align: "center" });
 
   // Save
   const filename = `Receipt_${data.receiptNo}_${data.donorName?.replace(/\s+/g, "_") || "donor"}.pdf`;
   doc.save(filename);
+
+  // Return blob for sharing
+  return doc.output("blob");
 }
 
 function loadImage(src: string): Promise<string> {
