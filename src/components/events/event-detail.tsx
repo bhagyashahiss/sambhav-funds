@@ -370,7 +370,20 @@ export function EventDetail({
       {/* Add Transaction Button */}
       {isAdmin && (
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            setEditingTxn(null);
+            setTxnType("income");
+            setAmount("");
+            setDonorName("");
+            setDonorPhone("");
+            setDescription("");
+            setPaymentMode("cash");
+            setMemberId("");
+            setTransactionDate("");
+            setIncidentDate("");
+            setLines([]);
+            setShowForm(!showForm);
+          }}
           className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
         >
           <Plus className="w-4 h-4" />
@@ -378,8 +391,8 @@ export function EventDetail({
         </button>
       )}
 
-      {/* Add/Edit Transaction Form */}
-      {showForm && isAdmin && (
+      {/* Add Transaction Form (only for new, not editing) */}
+      {showForm && !editingTxn && isAdmin && (
         <form
           onSubmit={editingTxn ? handleUpdate : handleSubmit}
           className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3"
@@ -637,7 +650,7 @@ export function EventDetail({
               disabled={loading}
               className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
             >
-              {editingTxn ? "Update Transaction" : "Save Transaction"}
+              Save Transaction
             </button>
             <button
               type="button"
@@ -655,8 +668,190 @@ export function EventDetail({
         <h2 className="text-lg font-semibold text-gray-900">Transactions</h2>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
           {transactions.map((txn) => (
+            <div key={txn.id}>
+              {editingTxn?.id === txn.id && isAdmin ? (
+                <form
+                  onSubmit={handleUpdate}
+                  className="p-4 bg-primary-50/30 border-l-4 border-l-primary-500 space-y-3"
+                >
+                  <p className="text-sm font-medium text-primary-700">Editing Transaction</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTxnType("income")}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                        txnType === "income"
+                          ? "bg-green-100 text-green-700 border border-green-300"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      Income
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTxnType("expense");
+                        if (lines.length === 0) setLines([{ item_name: "", amount: "" }]);
+                      }}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                        txnType === "expense"
+                          ? "bg-red-100 text-red-700 border border-red-300"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      Expense
+                    </button>
+                  </div>
+                  <select
+                    value={memberId}
+                    onChange={(e) => setMemberId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                    required
+                  >
+                    <option value="">Select Member</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                  {txnType === "income" && (
+                    <>
+                      <input
+                        type="number"
+                        placeholder="Amount (₹)"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                        required
+                        min="1"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Donor name (Labharthi)"
+                        list="donor-names-list"
+                        value={donorName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDonorName(val);
+                          const match = donorSuggestions.find((d) => d.name === val);
+                          if (match && match.phone) setDonorPhone(match.phone.replace(/^\+91/, ""));
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                      />
+                      <div className="flex items-center gap-1">
+                        <span className="px-3 py-2 bg-gray-100 border border-gray-300 border-r-0 rounded-l-lg text-sm text-gray-600">+91</span>
+                        <input
+                          type="tel"
+                          placeholder="Phone number"
+                          value={donorPhone}
+                          onChange={(e) => setDonorPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                          maxLength={10}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {txnType === "expense" && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-700">Expense Items</p>
+                        <button type="button" onClick={addLine} className="text-xs text-primary-600 hover:underline">+ Add Item</button>
+                      </div>
+                      {lines.map((line, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <div className="flex-1 relative">
+                            <input
+                              list="expense-items-list"
+                              placeholder="Select or type item"
+                              value={line.item_name}
+                              onChange={(e) => updateLine(idx, "item_name", e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                              required
+                            />
+                          </div>
+                          <input
+                            type="number"
+                            placeholder="₹"
+                            value={line.amount}
+                            onChange={(e) => updateLine(idx, "amount", e.target.value)}
+                            className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                            required
+                            min="1"
+                          />
+                          <button type="button" onClick={() => removeLine(idx)} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      {lines.length > 0 && (
+                        <p className="text-xs text-gray-500 text-right">
+                          Total: {formatCurrency(lines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0))}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    placeholder="Description / Note (optional)"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Payment Mode</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMode("cash")}
+                        className={`px-3 py-2 rounded-lg text-sm border transition ${paymentMode === "cash" ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-gray-300 text-gray-600"}`}
+                      >
+                        ● Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMode("upi")}
+                        className={`px-3 py-2 rounded-lg text-sm border transition ${paymentMode === "upi" ? "bg-indigo-50 border-indigo-300 text-indigo-700" : "bg-white border-gray-300 text-gray-600"}`}
+                      >
+                        ● UPI
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Transaction Date</label>
+                    <input
+                      type="date"
+                      value={transactionDate}
+                      onChange={(e) => setTransactionDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Incident Date</label>
+                    <input
+                      type="date"
+                      value={incidentDate}
+                      onChange={(e) => setIncidentDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                    >
+                      Update Transaction
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowForm(false); setEditingTxn(null); }}
+                      className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
             <div
-              key={txn.id}
               className={`px-4 py-3 ${
                 !txn.transaction_date ? "bg-amber-50/70" : ""
               } ${!txn.transaction_date && isAdmin ? "cursor-pointer hover:bg-amber-100/70" : ""}`}
@@ -762,6 +957,8 @@ export function EventDetail({
                 </div>
               )}
             </div>
+              )}
+          </div>
           ))}
           {transactions.length === 0 && (
             <p className="px-4 py-6 text-sm text-gray-500 text-center">

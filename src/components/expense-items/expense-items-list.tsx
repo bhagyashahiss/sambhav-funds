@@ -61,7 +61,7 @@ export function ExpenseItemsList({ items, isAdmin }: Props) {
         </button>
       )}
 
-      {showForm && isAdmin && (
+      {showForm && !editingId && isAdmin && (
         <form
           onSubmit={handleSubmit}
           className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 space-y-3"
@@ -80,7 +80,7 @@ export function ExpenseItemsList({ items, isAdmin }: Props) {
               disabled={loading}
               className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
             >
-              {editingId ? "Update" : "Create"}
+              Create
             </button>
             <button
               type="button"
@@ -98,29 +98,64 @@ export function ExpenseItemsList({ items, isAdmin }: Props) {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
         {items.map((item) => (
-          <div
-            key={item.id}
-            className="px-4 py-3 flex items-center justify-between"
-          >
-            <p className="text-sm font-medium text-gray-800">{item.name}</p>
-            {isAdmin && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    setEditingId(item.id);
-                    setName(item.name);
-                    setShowForm(true);
-                  }}
-                  className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+          <div key={item.id}>
+            {editingId === item.id && isAdmin ? (
+              <form
+                onSubmit={handleSubmit}
+                className="p-4 bg-primary-50/50 border-l-4 border-l-primary-500 space-y-3"
+              >
+                <p className="text-sm font-medium text-primary-700">Editing Item</p>
+                <input
+                  type="text"
+                  placeholder="Item name (e.g., Diva, Prabhavna, Lucky Draw)"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                  required
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                  >
+                    Update
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingId(null);
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="px-4 py-3 flex items-center justify-between">
+                <p className="text-sm font-medium text-gray-800">{item.name}</p>
+                {isAdmin && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setEditingId(item.id);
+                        setName(item.name);
+                        setShowForm(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

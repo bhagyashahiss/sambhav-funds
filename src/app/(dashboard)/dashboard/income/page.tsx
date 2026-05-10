@@ -187,6 +187,7 @@ export default function IncomePage() {
       donorName: txn.donor_name || "Anonymous",
       amount: Number(txn.amount),
       eventName: eventInfo?.name || null,
+      skipSave: true,
     });
 
     const filename = `Receipt_${receiptNo}_${txn.donor_name?.replace(/\s+/g, "_") || "donor"}.pdf`;

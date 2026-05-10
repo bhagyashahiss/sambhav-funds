@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { formatCurrency } from "@/lib/utils";
+import { exportToExcel, exportAllCombined } from "@/lib/export-excel";
+import { Download, ChevronDown } from "lucide-react";
 
 interface Category {
   id: string;
@@ -34,10 +36,12 @@ interface Props {
   events: Event[];
   members: Member[];
   transactions: Transaction[];
+  fullTransactions: any[];
 }
 
-export function ReportsView({ categories, events, members, transactions }: Props) {
+export function ReportsView({ categories, events, members, transactions, fullTransactions }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Balance per category
   const categorySummaries = categories.map((cat) => {
@@ -89,7 +93,91 @@ export function ReportsView({ categories, events, members, transactions }: Props
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+
+        {/* Export Excel Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            <Download className="w-4 h-4" />
+            Export Excel
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+
+          {showExportMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowExportMenu(false)}
+              />
+              <div className="absolute right-0 top-full mt-1 z-20 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 max-h-80 overflow-y-auto">
+                <button
+                  onClick={() => {
+                    exportAllCombined(fullTransactions, categories, events, members);
+                    setShowExportMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition font-semibold border-b border-gray-100"
+                >
+                  📦 Download All (Combined Excel)
+                </button>
+                <button
+                  onClick={() => {
+                    exportToExcel(fullTransactions, categories, events, members, {
+                      filterType: "all",
+                    });
+                    setShowExportMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-green-50 hover:text-green-700 transition font-medium"
+                >
+                  📊 Export All (Flat Sheets)
+                </button>
+
+                <div className="border-t border-gray-100 my-1" />
+                <p className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase">By Category</p>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      exportToExcel(fullTransactions, categories, events, members, {
+                        filterType: "category",
+                        filterId: cat.id,
+                        filterName: cat.name,
+                      });
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-green-50 hover:text-green-700 transition"
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+
+                <div className="border-t border-gray-100 my-1" />
+                <p className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase">By Event</p>
+                {events.map((evt) => (
+                  <button
+                    key={evt.id}
+                    onClick={() => {
+                      exportToExcel(fullTransactions, categories, events, members, {
+                        filterType: "event",
+                        filterId: evt.id,
+                        filterName: evt.name,
+                      });
+                      setShowExportMenu(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-green-50 hover:text-green-700 transition"
+                  >
+                    <span>{evt.name}</span>
+                    <span className="text-xs text-gray-400 ml-1">({evt.category?.name})</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Balance per Category */}
       <section>

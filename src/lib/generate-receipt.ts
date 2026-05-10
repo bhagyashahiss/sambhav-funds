@@ -7,6 +7,7 @@ interface ReceiptData {
   donorName: string;
   amount: number;
   eventName: string | null;
+  skipSave?: boolean;
 }
 
 export async function generateReceipt(data: ReceiptData) {
@@ -173,9 +174,11 @@ export async function generateReceipt(data: ReceiptData) {
   doc.setTextColor(150, 150, 150);
   doc.text("This is a computer-generated receipt.", pageWidth / 2, footerY, { align: "center" });
 
-  // Save
-  const filename = `Receipt_${data.receiptNo}_${data.donorName?.replace(/\s+/g, "_") || "donor"}.pdf`;
-  doc.save(filename);
+  // Save (skip if caller handles download separately, e.g. WhatsApp share)
+  if (!data.skipSave) {
+    const filename = `Receipt_${data.receiptNo}_${data.donorName?.replace(/\s+/g, "_") || "donor"}.pdf`;
+    doc.save(filename);
+  }
 
   // Return blob for sharing
   return doc.output("blob");

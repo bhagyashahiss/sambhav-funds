@@ -11,6 +11,7 @@ export default function ReportsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [fullTransactions, setFullTransactions] = useState<any[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
@@ -20,12 +21,18 @@ export default function ReportsPage() {
         { data: evts },
         { data: mems },
         { data: txns },
+        { data: fullTxns, error: fullTxnsError },
       ] = await Promise.all([
         supabase.from("categories").select("*").order("name"),
         supabase.from("events").select("*, category:categories(name)").order("date", { ascending: false }),
         supabase.from("members").select("*").order("name"),
         supabase.from("transactions").select("type, amount, member_id, event_id"),
+        supabase.from("transactions").select("*, member:members!member_id(name), event:events!event_id(name, date, category_id, category:categories(name)), expense_lines:event_expense_lines(id, item_name, amount)").order("created_at", { ascending: false }),
       ]);
+
+      if (fullTxnsError) {
+        console.error("Failed to fetch full transactions:", fullTxnsError);
+      }
 
       // Build event->category map
       const eventCatMap = (evts || []).reduce((acc: any, ev: any) => {
@@ -43,6 +50,7 @@ export default function ReportsPage() {
       setEvents(evts || []);
       setMembers(mems || []);
       setTransactions(enrichedTxns);
+      setFullTransactions(fullTxns || []);
       setLoading(false);
     }
 
@@ -63,6 +71,7 @@ export default function ReportsPage() {
       events={events}
       members={members}
       transactions={transactions}
+      fullTransactions={fullTransactions}
     />
   );
 }
