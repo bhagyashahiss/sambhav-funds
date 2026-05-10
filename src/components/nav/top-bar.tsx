@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -95,9 +96,13 @@ export function TopBar({ memberName, role }: TopBarProps) {
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-            <span className="text-xs font-bold text-primary-700">SS</span>
-          </div>
+          <Image
+            src="/icons/photo.jpg"
+            alt="SSYG Logo"
+            width={32}
+            height={32}
+            className="w-8 h-8 rounded-full object-cover"
+          />
           <span className="font-semibold text-sm text-gray-900 hidden sm:block">
             SSYG Funds
           </span>
