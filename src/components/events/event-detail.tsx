@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -12,6 +12,7 @@ import {
   X,
   Trash2,
   Pencil,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -77,7 +78,19 @@ export function EventDetail({
   const [donorSuggestions, setDonorSuggestions] = useState<{ name: string; phone: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [settlingTxnId, setSettlingTxnId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const supabase = createClient();
+
+  const filteredTransactions = useMemo(() => {
+    if (!searchQuery.trim()) return transactions;
+    const q = searchQuery.toLowerCase();
+    return transactions.filter((txn) => {
+      const donor = (txn.donor_name || "").toLowerCase();
+      const member = (txn.member?.name || "").toLowerCase();
+      const desc = (txn.description || "").toLowerCase();
+      return donor.includes(q) || member.includes(q) || desc.includes(q);
+    });
+  }, [transactions, searchQuery]);
 
   const totalIncome = transactions
     .filter((t) => t.type === "income")
@@ -666,8 +679,21 @@ export function EventDetail({
       {/* Transactions List */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-gray-900">Transactions</h2>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by donor name, member, description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
-          {transactions.map((txn) => (
+          {filteredTransactions.map((txn) => (
             <div key={txn.id}>
               {editingTxn?.id === txn.id && isAdmin ? (
                 <form
@@ -960,9 +986,9 @@ export function EventDetail({
               )}
           </div>
           ))}
-          {transactions.length === 0 && (
+          {filteredTransactions.length === 0 && (
             <p className="px-4 py-6 text-sm text-gray-500 text-center">
-              No transactions for this event yet.
+              {searchQuery ? "No transactions matching your search." : "No transactions for this event yet."}
             </p>
           )}
         </div>

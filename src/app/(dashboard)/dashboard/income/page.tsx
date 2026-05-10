@@ -32,6 +32,7 @@ export default function IncomePage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterEvent, setFilterEvent] = useState("");
   const [filterMember, setFilterMember] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [markingTxnId, setMarkingTxnId] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -78,7 +79,7 @@ export default function IncomePage() {
 
   // Filtered transactions
   const filtered = useMemo(() => {
-    return transactions.filter((txn) => {
+    const result = transactions.filter((txn) => {
       const eventInfo = txn.event_id ? events[txn.event_id] : null;
       const memberName = members[txn.member_id] || "";
       const donor = txn.donor_name || "";
@@ -109,9 +110,21 @@ export default function IncomePage() {
       // Member filter
       if (filterMember && txn.member_id !== filterMember) return false;
 
+      // Status filter (received / not received)
+      if (filterStatus === "not-received" && txn.transaction_date) return false;
+      if (filterStatus === "received" && !txn.transaction_date) return false;
+
       return true;
     });
-  }, [transactions, searchQuery, filterCategory, filterEvent, filterMember, events, members]);
+
+    // Sort by transaction_date (received on) descending, nulls first
+    return result.sort((a, b) => {
+      if (!a.transaction_date && !b.transaction_date) return 0;
+      if (!a.transaction_date) return -1;
+      if (!b.transaction_date) return 1;
+      return b.transaction_date.localeCompare(a.transaction_date);
+    });
+  }, [transactions, searchQuery, filterCategory, filterEvent, filterMember, filterStatus, events, members]);
 
   const totalFiltered = filtered.reduce((s, t) => s + Number(t.amount), 0);
 
@@ -304,13 +317,24 @@ export default function IncomePage() {
             ))}
           </select>
 
-          {(searchQuery || filterCategory || filterEvent || filterMember) && (
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">All Status</option>
+            <option value="not-received">Not Received</option>
+            <option value="received">Received</option>
+          </select>
+
+          {(searchQuery || filterCategory || filterEvent || filterMember || filterStatus) && (
             <button
               onClick={() => {
                 setSearchQuery("");
                 setFilterCategory("");
                 setFilterEvent("");
                 setFilterMember("");
+                setFilterStatus("");
               }}
               className="text-xs text-red-600 hover:text-red-700 px-2 py-1.5 border border-red-200 rounded-lg hover:bg-red-50 transition"
             >
